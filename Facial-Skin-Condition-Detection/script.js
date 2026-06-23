@@ -102,18 +102,74 @@ async function loadProducts() {
     }
     list.innerHTML = products
       .map((p, i) => `
-        <div class="product-card">
+        <div class="product-card" data-product="${encodeURIComponent(p.name || "")}">
           <span class="product-rank">${i + 1}</span>
           <div class="product-info">
             <h4>${p.name || "Product"}</h4>
             ${p.brand ? `<span class="product-brand">${p.brand}</span>` : ""}
             <p class="product-why">${p.why || ""}</p>
+            <div class="product-rating">
+              <span class="star-row">
+                ${[1,2,3,4,5].map(n => `<button class="star" data-star="${n}">★</button>`).join("")}
+              </span>
+              <span class="rating-meta">Loading…</span>
+            </div>
           </div>
         </div>
       `)
       .join("");
+
+    // load existing ratings + wire up clicks for each card
+    document.querySelectorAll("#productList .product-card").forEach((card) => {
+      const name = decodeURIComponent(card.dataset.product);
+      refreshRating(card, name);
+      card.querySelectorAll(".star").forEach((star) => {
+        star.addEventListener("click", () => submitRating(card, name, parseInt(star.dataset.star, 10)));
+      });
+    });
   } catch (error) {
     list.innerHTML = `<p class="product-why">Could not load products (${error.message}).</p>`;
+  }
+}
+
+function paintStars(card, average) {
+  const stars = card.querySelectorAll(".star");
+  const rounded = Math.round(average);
+  stars.forEach((s, idx) => s.classList.toggle("filled", idx < rounded));
+}
+
+async function refreshRating(card, name) {
+  const meta = card.querySelector(".rating-meta");
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/ratings?product=${encodeURIComponent(name)}`);
+    const data = await res.json();
+    paintStars(card, data.average || 0);
+    meta.textContent = data.count
+      ? `${data.average} (${data.count} rating${data.count === 1 ? "" : "s"})`
+      : "No ratings yet";
+  } catch {
+    meta.textContent = "";
+  }
+}
+
+async function submitRating(card, name, stars) {
+  const meta = card.querySelector(".rating-meta");
+  meta.textContent = "Saving…";
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/rate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_name: name, stars: stars }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      paintStars(card, data.average || 0);
+      meta.textContent = `${data.average} (${data.count} rating${data.count === 1 ? "" : "s"})`;
+    } else {
+      meta.textContent = data.error || "Could not save rating";
+    }
+  } catch (error) {
+    meta.textContent = "Could not save rating";
   }
 }
 

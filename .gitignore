@@ -16,3 +16,4 @@ weights/*.pth
 *.env
 skin-detection-env/
 .DS_Store
+ratings.db

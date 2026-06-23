@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src import config
+from src.ratings_db import init_db, add_rating, get_rating
 from src.acnescan_engine import AcneScanDecisionEngine
 from src.decision_engine import HybridDecisionEngine
 from src.efficientnet_classifier import EfficientNetAcneClassifier
@@ -577,6 +578,10 @@ class ChatRequest(BaseModel):
     history: list[ChatMessage] = []
     message: str
 
+class RateRequest(BaseModel):
+    product_name: str
+    stars: int
+
 
 @app.post("/api/advice")
 def api_advice(req: AdviceRequest):
@@ -592,6 +597,19 @@ def api_chat(req: ChatRequest):
 def api_products(req: AdviceRequest):
     return suggest_products(req.model_dump())
 
+@app.post("/api/rate")
+def api_rate(req: RateRequest):
+    return add_rating(req.product_name, req.stars)
+
+
+@app.get("/api/ratings")
+def api_ratings(product: str):
+    return get_rating(product)
+
 create_output_dirs()
 app.mount("/outputs", StaticFiles(directory=config.OUTPUT_DIR), name="outputs")
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+create_output_dirs()
+init_db()
+app.mount("/outputs", StaticFiles(directory=config.OUTPUT_DIR), name="outputs")
