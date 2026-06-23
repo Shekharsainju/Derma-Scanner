@@ -15,6 +15,8 @@ from src.efficientnet_classifier import EfficientNetAcneClassifier
 from src.flexible_gradcam_explainer import FlexibleGradCAMExplainer
 from src.gradcam_explainer import GradCAMExplainer
 from src.labels import get_broad_category
+from pydantic import BaseModel
+from src.llm_advisor import generate_advice, chat_followup, suggest_products
 from src.preprocessing import load_uploaded_image
 from src.resnet_classifier import ResNetClassifier
 from src.utils import create_output_dirs, crop_image_using_box, save_uploaded_image, timestamp
@@ -557,6 +559,38 @@ async def analyze(file: UploadFile = File(...)):
     result["detail_items"] = _build_detail_items(image, result, result["visualizations"]["uploaded_image_url"])
     return result
 
+class AdviceRequest(BaseModel):
+    primary_label: Optional[str] = None
+    severity: Optional[str] = None
+    areas_found: Optional[int] = 0
+    consumer_summary: Optional[str] = None
+    result_type: Optional[str] = None
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    scan_context: AdviceRequest
+    history: list[ChatMessage] = []
+    message: str
+
+
+@app.post("/api/advice")
+def api_advice(req: AdviceRequest):
+    return generate_advice(req.model_dump())
+
+
+@app.post("/api/chat")
+def api_chat(req: ChatRequest):
+    history = [m.model_dump() for m in req.history]
+    return chat_followup(req.scan_context.model_dump(), history, req.message)
+
+@app.post("/api/products")
+def api_products(req: AdviceRequest):
+    return suggest_products(req.model_dump())
 
 create_output_dirs()
 app.mount("/outputs", StaticFiles(directory=config.OUTPUT_DIR), name="outputs")
